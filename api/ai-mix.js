@@ -17,19 +17,23 @@ export default async function handler(req, res) {
       currentTime,
     } = req.body || {};
 
-    if (!places.length) {
-      return res.status(400).json({ error: 'Nessun posto disponibile per creare il mix' });
+    if (!Array.isArray(places) || places.length === 0) {
+      return res.status(400).json({
+        error: 'Nessun posto disponibile per creare il mix',
+      });
     }
 
     const placesText = places
       .slice(0, 15)
       .map((p, i) => {
         return `${i + 1}. ${p.name}
+ID: ${p.id || ''}
 Categoria: ${p.section || ''} / ${p.subcategory || ''}
 Rating: ${p.rating || 'n/d'}
 Distanza: ${p.distanceKm || 'n/d'} km
 Aperto ora: ${p.isOpenNow ? 'sì' : 'da verificare'}
-Indirizzo: ${p.address || 'n/d'}`;
+Indirizzo: ${p.address || 'n/d'}
+Descrizione: ${p.description || 'n/d'}`;
       })
       .join('\n\n');
 
@@ -38,10 +42,12 @@ Crea un itinerario serio per Lake Finder.
 
 Regole:
 - Rispondi SOLO in JSON valido.
+- Non usare markdown.
 - Non inventare posti fuori dalla lista.
 - Usa 3 o 4 tappe massimo.
-- Ogni tappa deve avere orario, nome posto, motivo concreto, durata stimata.
-- Deve sembrare un piano turistico reale, non generico.
+- Ogni tappa deve avere time, title e reason.
+- Il campo title deve essere tipo: "Prima tappa: Nome posto".
+- Il campo reason deve spiegare perché ha senso andarci.
 - Considera distanza, rating, apertura, categoria e preferenze.
 - Se ci sono pochi dati, crea comunque il piano migliore possibile.
 
@@ -56,15 +62,14 @@ ${placesText}
 
 Formato JSON obbligatorio:
 {
-  "title": "string",
-  "summary": "string",
+  "title": "Mix AI - titolo breve",
+  "summary": "breve riassunto del piano",
+  "usedIds": ["id1", "id2"],
   "steps": [
     {
-      "time": "string",
-      "title": "string",
-      "placeName": "string",
-      "reason": "string",
-      "duration": "string"
+      "time": "10:00 - 11:15",
+      "title": "Prima tappa: Nome posto",
+      "reason": "Motivo concreto della scelta."
     }
   ]
 }
@@ -88,19 +93,27 @@ Formato JSON obbligatorio:
 
     if (!response.ok) {
       return res.status(500).json({
-        error: data.error?.message || 'Errore AI Mix',
+        error: data?.error?.message || 'Errore AI Mix',
       });
     }
 
     const raw =
       data.output_text ||
       data.output?.[0]?.content?.[0]?.text ||
+      data.output?.[0]?.content?.[0]?.value ||
       '';
 
-    let plan;
+    if (!raw) {
+      return res.status(500).json({
+        error: 'Risposta AI vuota',
+        raw: data,
+      });
+    }
+
+    let parsed;
 
     try {
-      plan = JSON.parse(raw);
+      parsed = JSON.parse(raw);
     } catch {
       return res.status(500).json({
         error: 'Risposta AI non valida',
@@ -108,7 +121,29 @@ Formato JSON obbligatorio:
       });
     }
 
-    return res.status(200).json(plan);
+    const plan = {
+      title: parsed.title || `Mix AI - ${locationName || 'Lago di Garda'}`,
+      summary: parsed.summary || '',
+      usedIds: Array.isArray(parsed.usedIds) ? parsed.usedIds : [],
+      steps: Array.isArray(parsed.steps)
+        ? parsed.steps.map((step, index) => ({
+            time: step.time || `${10 + index}:00`,
+            title: step.title || `Tappa ${index + 1}`,
+            reason: step.reason || 'Scelto perché è adatto al piano.',
+          }))
+        : [],
+    };
+
+    if (!plan.steps.length) {
+      return res.status(500).json({
+        error: 'Piano AI senza tappe',
+        raw: parsed,
+      });
+    }
+
+    return res.status(200).json({
+      plan,
+    });
   } catch (e) {
     return res.status(500).json({
       error: 'Errore server AI Mix',
