@@ -68,27 +68,21 @@ export default async function handler(req, res) {
         )}&key=${apiKey}`
       : '';
 
-    const opening =
-      place.current_opening_hours ||
-      place.opening_hours ||
-      null;
+    const opening = place.current_opening_hours || place.opening_hours || null;
 
     const weekdayText =
       opening && Array.isArray(opening.weekday_text)
         ? opening.weekday_text
         : [];
 
-    const isOpenNow =
-      opening && typeof opening.open_now === 'boolean'
-        ? opening.open_now
-        : null;
+    const hasOpenNowData = !!opening && typeof opening.open_now === 'boolean';
+    const isOpenNow = hasOpenNowData ? opening.open_now === true : false;
 
-    const openInfoText =
-      isOpenNow === true
+    const openInfoText = hasOpenNowData
+      ? isOpenNow
         ? 'Aperto ora'
-        : isOpenNow === false
-        ? 'Chiuso ora'
-        : 'Orari da verificare';
+        : 'Chiuso ora'
+      : 'Orari da verificare';
 
     return res.status(200).json({
       googlePlaceId: place.place_id || placeId,
@@ -100,16 +94,22 @@ export default async function handler(req, res) {
         '',
       website: place.website || '',
       googleMapsUrl: place.url || '',
-      rating: place.rating || 0,
-      userRatingsTotal: place.user_ratings_total || 0,
-      priceLevel: place.price_level,
+      rating: Number(place.rating || 0),
+      userRatingsTotal: Number(place.user_ratings_total || 0),
+      priceLevel:
+        place.price_level !== undefined && place.price_level !== null
+          ? place.price_level
+          : null,
       businessStatus: place.business_status || '',
-      types: place.types || [],
+      types: Array.isArray(place.types) ? place.types : [],
       image: photoUrl,
       photoUrl,
-      hours: weekdayText.length ? weekdayText.join('\n') : 'Orari non disponibili',
+      hours: weekdayText.length
+        ? weekdayText.join('\n')
+        : 'Orari non disponibili. Chiama o controlla su Google Maps prima di andare.',
       weekdayText,
       isOpenNow,
+      hasOpenNowData,
       openInfoText,
       rawOpeningHours: opening,
       lat: place.geometry?.location?.lat || null,
