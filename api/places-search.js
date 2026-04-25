@@ -21,7 +21,10 @@ export default async function handler(req, res) {
 
     const cleanQuery = String(query).trim();
     const cleanLocationName = String(locationName).trim();
-    const radiusMeters = Math.max(1000, Math.min(Number(radiusKm || 10) * 1000, 50000));
+    const radiusMeters = Math.max(
+      1000,
+      Math.min(Number(radiusKm || 10) * 1000, 50000)
+    );
 
     const url =
       `https://maps.googleapis.com/maps/api/place/textsearch/json` +
@@ -44,6 +47,10 @@ export default async function handler(req, res) {
     if (data.status === 'ZERO_RESULTS') {
       return res.status(200).json({
         status: 'ZERO_RESULTS',
+        query: cleanQuery,
+        locationName: cleanLocationName,
+        radiusMeters,
+        count: 0,
         results: [],
       });
     }
@@ -61,16 +68,28 @@ export default async function handler(req, res) {
       const photoReference =
         place.photos && place.photos[0] && place.photos[0].photo_reference
           ? place.photos[0].photo_reference
-          : null;
+          : '';
 
       const photoUrl = photoReference
-        ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=${encodeURIComponent(
-            photoReference
-          )}&key=${apiKey}`
+        ? `/api/place-photo?photoReference=${encodeURIComponent(photoReference)}&maxwidth=900`
         : '';
 
       const opening = place.opening_hours || null;
       const hasOpenNowData = !!opening && typeof opening.open_now === 'boolean';
+
+      const latValue =
+        place.geometry &&
+        place.geometry.location &&
+        place.geometry.location.lat != null
+          ? place.geometry.location.lat
+          : null;
+
+      const lonValue =
+        place.geometry &&
+        place.geometry.location &&
+        place.geometry.location.lng != null
+          ? place.geometry.location.lng
+          : null;
 
       return {
         place_id: place.place_id || '',
@@ -79,18 +98,8 @@ export default async function handler(req, res) {
         formatted_address: place.formatted_address || '',
         address: place.formatted_address || '',
         geometry: place.geometry || null,
-        lat:
-          place.geometry &&
-          place.geometry.location &&
-          place.geometry.location.lat != null
-            ? place.geometry.location.lat
-            : null,
-        lon:
-          place.geometry &&
-          place.geometry.location &&
-          place.geometry.location.lng != null
-            ? place.geometry.location.lng
-            : null,
+        lat: latValue,
+        lon: lonValue,
         rating: Number(place.rating || 0),
         user_ratings_total: Number(place.user_ratings_total || 0),
         userRatingsTotal: Number(place.user_ratings_total || 0),
@@ -109,6 +118,7 @@ export default async function handler(req, res) {
             ? 'Aperto ora'
             : 'Chiuso ora'
           : 'Orari da verificare',
+        photoReference,
         photoUrl,
         image: photoUrl,
         description:
