@@ -37,7 +37,7 @@ function getPhotoUrl(photoReference) {
 
   if (!ref) return '';
 
-  return `/api/place-photo?photoReference=${encodeURIComponent(ref)}&maxWidth=1200`;
+  return `/api/place-photo?photoReference=${encodeURIComponent(ref)}&maxwidth=1200`;
 }
 
 function getBestPhotoReference(place) {
@@ -73,6 +73,16 @@ function buildGoogleResult(place) {
   const photoUrl = getPhotoUrl(photoReference);
   const opening = getOpeningStatus(place);
 
+  const lat =
+    place?.geometry?.location?.lat !== undefined
+      ? Number(place.geometry.location.lat)
+      : null;
+
+  const lon =
+    place?.geometry?.location?.lng !== undefined
+      ? Number(place.geometry.location.lng)
+      : null;
+
   return {
     place_id: place.place_id || '',
     googlePlaceId: place.place_id || '',
@@ -82,16 +92,8 @@ function buildGoogleResult(place) {
     address: place.formatted_address || place.vicinity || '',
 
     geometry: place.geometry || null,
-
-    lat:
-      place?.geometry?.location?.lat !== undefined
-        ? Number(place.geometry.location.lat)
-        : null,
-
-    lon:
-      place?.geometry?.location?.lng !== undefined
-        ? Number(place.geometry.location.lng)
-        : null,
+    lat,
+    lon,
 
     types: Array.isArray(place.types) ? place.types : [],
 
@@ -147,7 +149,6 @@ function isStrictFoodPlace(place) {
     'pizza',
     'sushi',
     'giapponese',
-    'bar',
     'caff',
     'gelateria',
     'gelato',
@@ -172,6 +173,7 @@ function isStrictFoodPlace(place) {
     'parking',
     'gas_station',
     'lodging',
+    'hotel',
     'church',
     'museum',
     'tourist_attraction',
@@ -183,6 +185,8 @@ function isStrictFoodPlace(place) {
     'car_repair',
     'school',
     'local_government_office',
+    'city_hall',
+    'police',
   ];
 
   return containsAny(source, foodWords) && !containsAny(source, blockWords);
@@ -203,7 +207,11 @@ function isServiceLike(place, query) {
   }
 
   if (q.includes('benzina') || q.includes('distributore')) {
-    return source.includes('gas_station') || source.includes('benzina') || source.includes('distributore');
+    return (
+      source.includes('gas_station') ||
+      source.includes('benzina') ||
+      source.includes('distributore')
+    );
   }
 
   if (q.includes('supermercato') || q.includes('alimentari')) {
@@ -217,15 +225,28 @@ function isServiceLike(place, query) {
   }
 
   if (q.includes('meccanico') || q.includes('officina')) {
-    return source.includes('car_repair') || source.includes('meccanico') || source.includes('officina');
+    return (
+      source.includes('car_repair') ||
+      source.includes('meccanico') ||
+      source.includes('officina')
+    );
   }
 
   if (q.includes('banca') || q.includes('bancomat') || q.includes('atm')) {
-    return source.includes('bank') || source.includes('atm') || source.includes('banca') || source.includes('bancomat');
+    return (
+      source.includes('bank') ||
+      source.includes('atm') ||
+      source.includes('banca') ||
+      source.includes('bancomat')
+    );
   }
 
   if (q.includes('poste') || q.includes('ufficio postale')) {
-    return source.includes('post_office') || source.includes('poste') || source.includes('postale');
+    return (
+      source.includes('post_office') ||
+      source.includes('poste') ||
+      source.includes('postale')
+    );
   }
 
   return true;
@@ -363,6 +384,7 @@ async function fetchGoogleTextSearch({
   }
 
   const type = getSearchTypeFromQuery(query);
+
   if (type) {
     params.set('type', type);
   }
@@ -398,6 +420,7 @@ async function fetchGoogleNearbySearch({
   params.set('location', `${lat},${lon}`);
   params.set('radius', String(radiusMeters));
   params.set('language', 'it');
+  params.set('region', 'it');
 
   if (type) params.set('type', type);
   if (keyword) params.set('keyword', keyword);
@@ -445,10 +468,7 @@ function buildQueries(query, locationName, mode) {
     ];
   }
 
-  return [
-    `${q} ${loc}`,
-    q,
-  ];
+  return [`${q} ${loc}`, q];
 }
 
 export default async function handler(req, res) {
@@ -577,12 +597,12 @@ export default async function handler(req, res) {
       });
     }
 
-    cleaned = sortPlaces(cleaned)
+    const results = sortPlaces(cleaned)
       .slice(0, MAX_RESULTS)
       .map(buildGoogleResult);
 
     return res.status(200).json({
-      status: cleaned.length ? 'OK' : 'ZERO_RESULTS',
+      status: results.length ? 'OK' : 'ZERO_RESULTS',
       provider: 'Google Places',
       source: 'google_places',
       query: cleanQuery,
@@ -590,8 +610,8 @@ export default async function handler(req, res) {
       radiusKm: radius,
       mode: cleanMode,
       openNowOnly: wantsOpenNow,
-      count: cleaned.length,
-      results: cleaned,
+      count: results.length,
+      results,
     });
   } catch (e) {
     return res.status(500).json({
