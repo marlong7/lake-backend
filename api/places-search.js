@@ -54,6 +54,23 @@ function dedupeResults(results) {
   return finalResults;
 }
 
+function addPhotoUrl(place) {
+  const photoReference = Array.isArray(place?.photos)
+    ? place.photos[0]?.photo_reference || ''
+    : '';
+
+  if (!photoReference) return place;
+
+  const photoUrl = `/api/place-photo?photoReference=${encodeURIComponent(photoReference)}&maxwidth=1200`;
+
+  return {
+    ...place,
+    photoReference,
+    photoUrl,
+    image: photoUrl,
+  };
+}
+
 async function googleTextSearch({ query, lat, lng, radius, language, openNow, apiKey }) {
   const params = new URLSearchParams({
     query,
@@ -171,7 +188,8 @@ module.exports = async function placesSearch(req, res) {
       }
     }
 
-    const finalResults = dedupeResults(rawResults);
+    const finalResults = dedupeResults(rawResults).map(addPhotoUrl);
+
     debug.rawCount = rawResults.length;
     debug.finalCount = finalResults.length;
 
