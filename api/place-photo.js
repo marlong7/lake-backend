@@ -19,7 +19,7 @@ export default async function handler(req, res) {
       process.env.GOOGLE_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: 'GOOGLE_PLACES_API_KEY non trovata' });
+      return res.status(500).json({ error: 'Google API key non trovata' });
     }
 
     const params = new URLSearchParams({
@@ -29,13 +29,16 @@ export default async function handler(req, res) {
     });
 
     const googleUrl = `https://maps.googleapis.com/maps/api/place/photo?${params.toString()}`;
-
     const response = await fetch(googleUrl, { redirect: 'follow' });
 
     if (!response.ok) {
+      const googleText = await response.text();
+
       return res.status(response.status).json({
         error: 'Errore Google Place Photo',
         status: response.status,
+        googleText,
+        photoReferenceLength: photoReference.length,
       });
     }
 
